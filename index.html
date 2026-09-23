@@ -95,7 +95,8 @@ const firebaseConfig = {
 };
 
 const ADMIN_PASSWORD = 'minhtriet1973';
-const DEFAULT_LOGIN_PASSWORD = 'tailieu#2026';
+const DEFAULT_LOGIN_PASSWORD = 'ideco@2026';
+const LOGIN_PASSWORD_REVISION = 'ideco-login-2026-09-v1';
 const DB_PATH = 'ideco_document_center/config';
 const LOGIN_KEY = 'ideco_docs_logged_in_v3';
 const LOGIN_VERSION_KEY = 'ideco_docs_login_version_v3';
@@ -104,7 +105,8 @@ const DEFAULT_SETTINGS = {
   title:'Dữ liệu thông tin công ty phục vụ cho công việc',
   folders:[],
   loginPasswordHash:'',
-  authVersion:'initial'
+  authVersion:'initial',
+  passwordRevision:LOGIN_PASSWORD_REVISION
 };
 let settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 let db = null, configRef = null, firebaseReady = false;
@@ -128,8 +130,15 @@ async function initFirebase(){
       let data=snap.val();
       if(!data){
         const h=await sha256(DEFAULT_LOGIN_PASSWORD);
-        data={...DEFAULT_SETTINGS,loginPasswordHash:h,authVersion:String(Date.now())};
+        data={...DEFAULT_SETTINGS,loginPasswordHash:h,authVersion:String(Date.now()),passwordRevision:LOGIN_PASSWORD_REVISION};
         try{await configRef.set(data)}catch(e){console.error(e)}
+      }
+      // Một lần chuyển mật khẩu đăng nhập dùng chung sang ideco@2026.
+      // Dấu revision giúp không ghi đè các lần đổi mật khẩu về sau trong phần Cài đặt.
+      if(data.passwordRevision!==LOGIN_PASSWORD_REVISION){
+        const h=await sha256(DEFAULT_LOGIN_PASSWORD);
+        data={...data,loginPasswordHash:h,authVersion:String(Date.now()),passwordRevision:LOGIN_PASSWORD_REVISION};
+        try{await configRef.update({loginPasswordHash:data.loginPasswordHash,authVersion:data.authVersion,passwordRevision:LOGIN_PASSWORD_REVISION})}catch(e){console.warn('Không thể cập nhật mật khẩu đăng nhập mới lên Firebase:',e)}
       }
       const oldVersion=settings.authVersion;
       settings={...DEFAULT_SETTINGS,...data,folders:Array.isArray(data.folders)?data.folders:[]};
