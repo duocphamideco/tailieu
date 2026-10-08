@@ -98,6 +98,40 @@ const ADMIN_PASSWORD = 'minhtriet1973';
 const DEFAULT_LOGIN_PASSWORD = 'ideco@2026';
 const LOGIN_PASSWORD_REVISION = 'ideco-login-2026-09-v1';
 const DB_PATH = 'ideco_document_center/config';
+// Thư mục IDECO mặc định; tự bổ sung một lần mà không xóa danh sách cũ.
+const REQUIRED_DRIVE_FOLDER = Object.freeze({
+  name: 'ẢNH TƯ LIỆU NHÓM KHÔNG THUỐC',
+  url: 'https://drive.google.com/drive/folders/1js4wXrMgf45puyFWc7oaj4PaBOV4U3y2?usp=drive_link',
+  desc: 'Tài liệu và hình ảnh nhóm không thuốc'
+});
+let folderSyncRunning = false;
+function hasRequiredFolder(folders){
+  return Array.isArray(folders) && folders.some(f => f && extractFolderId(f.url||f.id||'') === extractFolderId(REQUIRED_DRIVE_FOLDER.url));
+}
+function ensureRequiredFolderLocally(){
+  if(!hasRequiredFolder(settings.folders)){
+    settings.folders = [...(settings.folders||[]), {...REQUIRED_DRIVE_FOLDER}];
+    cacheSettings();renderFolders();
+  }
+}
+async function syncRequiredFolder(){
+  if(!configRef || folderSyncRunning || hasRequiredFolder(settings.folders)) return;
+  folderSyncRunning = true;
+  ensureRequiredFolderLocally();
+  try{
+    const result = await configRef.child('folders').transaction(current => {
+      const folders = Array.isArray(current) ? current : [];
+      if(hasRequiredFolder(folders)) return; // người dùng khác đã thêm
+      return [...folders, {...REQUIRED_DRIVE_FOLDER}];
+    },undefined,false);
+    if(!result.committed && !hasRequiredFolder(result.snapshot?.val())){
+      console.warn('Chưa thể thêm thư mục vào Firebase.');
+    }
+  }catch(error){
+    console.warn('Thư mục đang hiển thị tại máy này; Firebase không cho đồng bộ:',error);
+    document.getElementById('syncText').textContent='Đọc được dữ liệu, cần quyền ghi Firebase để đồng bộ thư mục mới';
+  }finally{folderSyncRunning=false;}
+}
 const LOGIN_KEY = 'ideco_docs_logged_in_v3';
 const LOGIN_VERSION_KEY = 'ideco_docs_login_version_v3';
 const LOCAL_CACHE_KEY = 'ideco_docs_firebase_cache_v3';
@@ -121,7 +155,7 @@ function showApp(){document.getElementById('loginView').classList.add('hidden');
 function refreshAuthState(){if(isLogged())showApp();else{localStorage.removeItem(LOGIN_KEY);showLogin()}}
 
 async function initFirebase(){
-  loadCache(); applyTitle(); refreshAuthState();
+  loadCache(); ensureRequiredFolderLocally(); applyTitle(); refreshAuthState();
   try{
     firebase.initializeApp(firebaseConfig);
     db=firebase.database(); configRef=db.ref(DB_PATH); firebaseReady=true;
@@ -146,6 +180,7 @@ async function initFirebase(){
       settings.folders=settings.folders.map(f=>{if(!f)return f;const nn=normalizeFolderName(f.name);if(nn!==String(f.name||'').trim())renamed=true;return {...f,name:nn}});
       if(renamed){try{await configRef.update({folders:settings.folders})}catch(e){console.warn('Không thể lưu tên thư mục mới lên Firebase:',e)}}
       cacheSettings();applyTitle();renderFolders();
+      if(!hasRequiredFolder(settings.folders)) await syncRequiredFolder();
       if(oldVersion && oldVersion!==settings.authVersion && localStorage.getItem(LOGIN_KEY)==='1'){
         if(localStorage.getItem(LOGIN_VERSION_KEY)!==settings.authVersion){localStorage.removeItem(LOGIN_KEY);localStorage.removeItem(LOGIN_VERSION_KEY);closeSettings();closeViewer();showLogin();toast('Mật khẩu đã thay đổi. Vui lòng đăng nhập lại.','err')}
       }
@@ -194,6 +229,7 @@ async function saveSettings(){
   if(!firebaseReady||!configRef){alert('Chưa kết nối được Firebase. Không thể lưu cấu hình dùng chung.');return}
   const title=document.getElementById('settingTitle').value.trim()||DEFAULT_SETTINGS.title;
   const folders=(settings.folders||[]).map(f=>({name:normalizeFolderName(f.name),url:String(f.url||'').trim(),desc:String(f.desc||'').trim()})).filter(f=>f.name||f.url||f.desc);
+  if(!hasRequiredFolder(folders)) folders.push({...REQUIRED_DRIVE_FOLDER});
   const incomplete=folders.filter(f=>!f.name||!f.url);if(incomplete.length){alert('Mỗi thư mục cần có cả Tên thư mục và Link Google Drive.');return}
   const invalid=folders.filter(f=>!extractFolderId(f.url));if(invalid.length){alert('Có link Drive chưa đúng dạng folder. Hãy dùng link có /drive/folders/...');return}
   const p1=document.getElementById('newLoginPassword').value;const p2=document.getElementById('confirmLoginPassword').value;
