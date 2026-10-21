@@ -76,7 +76,8 @@
 </div>
 
 <div id="viewer" class="viewer hidden">
-  <div class="viewer-head"><div class="viewer-title" id="viewerTitle">Thư mục</div><div class="viewer-actions"><button class="btn btn-ghost" id="openDriveBtn">↗ Mở riêng</button><button class="btn btn-primary" onclick="closeViewer()">Đóng</button></div></div>
+  <div class="viewer-head"><div class="viewer-title" id="viewerTitle">Thư mục</div><div class="viewer-actions"><button class="btn btn-ghost" id="openDriveBtn">↗ Mở trên Drive</button><button class="btn btn-outline" id="downloadFolderBtn">⬇ Tải cả thư mục</button><button class="btn btn-primary" onclick="closeViewer()">Đóng</button></div></div>
+  <div style="padding:9px 18px;background:#fff8ed;color:#765321;font-size:12px;border-bottom:1px solid #f2dfbf">📥 Tải một file: chọn file trong Drive để tải. Tải cả thư mục: bấm nút <b>Tải cả thư mục</b>, sau đó trong Google Drive chọn tên thư mục → <b>Tải xuống</b> để Google tạo file ZIP. Cần có quyền tải xuống.</div>
   <iframe id="driveFrame" allow="autoplay"></iframe>
 </div>
 
@@ -94,50 +95,23 @@ const firebaseConfig = {
   measurementId: "G-TJTL87T9MV"
 };
 
+const FEATURED_FOLDER = {name:'KHO TÀI LIỆU GOOGLE DRIVE IDECO',url:'https://drive.google.com/drive/folders/1Nf2B8Xx3CXkTYGJB05EWMeCENEyxRgEs?usp=drive_link',desc:'Tra cứu, xem, tải từng file hoặc tải toàn bộ thư mục từ Google Drive.'};
+function addFeaturedFolder(folders){
+  const arr=Array.isArray(folders)?folders.slice():[];
+  const idx=arr.findIndex(f=>f && extractFolderId(f.url||f.id||'')===extractFolderId(FEATURED_FOLDER.url));
+  if(idx<0) arr.unshift({...FEATURED_FOLDER});
+  return arr;
+}
 const ADMIN_PASSWORD = 'minhtriet1973';
 const DEFAULT_LOGIN_PASSWORD = 'ideco@2026';
 const LOGIN_PASSWORD_REVISION = 'ideco-login-2026-09-v1';
 const DB_PATH = 'ideco_document_center/config';
-// Thư mục IDECO mặc định; tự bổ sung một lần mà không xóa danh sách cũ.
-const REQUIRED_DRIVE_FOLDER = Object.freeze({
-  name: 'ẢNH TƯ LIỆU NHÓM KHÔNG THUỐC',
-  url: 'https://drive.google.com/drive/folders/1js4wXrMgf45puyFWc7oaj4PaBOV4U3y2?usp=drive_link',
-  desc: 'Tài liệu và hình ảnh nhóm không thuốc'
-});
-let folderSyncRunning = false;
-function hasRequiredFolder(folders){
-  return Array.isArray(folders) && folders.some(f => f && extractFolderId(f.url||f.id||'') === extractFolderId(REQUIRED_DRIVE_FOLDER.url));
-}
-function ensureRequiredFolderLocally(){
-  if(!hasRequiredFolder(settings.folders)){
-    settings.folders = [...(settings.folders||[]), {...REQUIRED_DRIVE_FOLDER}];
-    cacheSettings();renderFolders();
-  }
-}
-async function syncRequiredFolder(){
-  if(!configRef || folderSyncRunning || hasRequiredFolder(settings.folders)) return;
-  folderSyncRunning = true;
-  ensureRequiredFolderLocally();
-  try{
-    const result = await configRef.child('folders').transaction(current => {
-      const folders = Array.isArray(current) ? current : [];
-      if(hasRequiredFolder(folders)) return; // người dùng khác đã thêm
-      return [...folders, {...REQUIRED_DRIVE_FOLDER}];
-    },undefined,false);
-    if(!result.committed && !hasRequiredFolder(result.snapshot?.val())){
-      console.warn('Chưa thể thêm thư mục vào Firebase.');
-    }
-  }catch(error){
-    console.warn('Thư mục đang hiển thị tại máy này; Firebase không cho đồng bộ:',error);
-    document.getElementById('syncText').textContent='Đọc được dữ liệu, cần quyền ghi Firebase để đồng bộ thư mục mới';
-  }finally{folderSyncRunning=false;}
-}
 const LOGIN_KEY = 'ideco_docs_logged_in_v3';
 const LOGIN_VERSION_KEY = 'ideco_docs_login_version_v3';
 const LOCAL_CACHE_KEY = 'ideco_docs_firebase_cache_v3';
 const DEFAULT_SETTINGS = {
   title:'Dữ liệu thông tin công ty phục vụ cho công việc',
-  folders:[],
+  folders:[{...FEATURED_FOLDER}],
   loginPasswordHash:'',
   authVersion:'initial',
   passwordRevision:LOGIN_PASSWORD_REVISION
@@ -148,14 +122,14 @@ let db = null, configRef = null, firebaseReady = false;
 function toast(msg,type=''){const el=document.getElementById('statusToast');el.textContent=msg;el.className='top-status '+type;el.classList.remove('hidden');clearTimeout(window.__toastT);window.__toastT=setTimeout(()=>el.classList.add('hidden'),3200)}
 async function sha256(text){const data=new TextEncoder().encode(text);const digest=await crypto.subtle.digest('SHA-256',data);return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('')}
 function cacheSettings(){try{localStorage.setItem(LOCAL_CACHE_KEY,JSON.stringify(settings))}catch(e){}}
-function loadCache(){try{const c=JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY)||'{}');settings={...DEFAULT_SETTINGS,...c,folders:Array.isArray(c.folders)?c.folders:[]}}catch(e){settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS))}}
+function loadCache(){try{const c=JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY)||'{}');settings={...DEFAULT_SETTINGS,...c,folders:addFeaturedFolder(c.folders)}}catch(e){settings=JSON.parse(JSON.stringify(DEFAULT_SETTINGS))}}
 function isLogged(){return localStorage.getItem(LOGIN_KEY)==='1' && localStorage.getItem(LOGIN_VERSION_KEY)===(settings.authVersion||'initial')}
 function showLogin(){document.getElementById('loginView').classList.remove('hidden');document.getElementById('appView').classList.add('hidden')}
 function showApp(){document.getElementById('loginView').classList.add('hidden');document.getElementById('appView').classList.remove('hidden');applyTitle();renderFolders()}
 function refreshAuthState(){if(isLogged())showApp();else{localStorage.removeItem(LOGIN_KEY);showLogin()}}
 
 async function initFirebase(){
-  loadCache(); ensureRequiredFolderLocally(); applyTitle(); refreshAuthState();
+  loadCache(); applyTitle(); refreshAuthState();
   try{
     firebase.initializeApp(firebaseConfig);
     db=firebase.database(); configRef=db.ref(DB_PATH); firebaseReady=true;
@@ -175,12 +149,12 @@ async function initFirebase(){
         try{await configRef.update({loginPasswordHash:data.loginPasswordHash,authVersion:data.authVersion,passwordRevision:LOGIN_PASSWORD_REVISION})}catch(e){console.warn('Không thể cập nhật mật khẩu đăng nhập mới lên Firebase:',e)}
       }
       const oldVersion=settings.authVersion;
-      settings={...DEFAULT_SETTINGS,...data,folders:Array.isArray(data.folders)?data.folders:[]};
+      settings={...DEFAULT_SETTINGS,...data,folders:addFeaturedFolder(data.folders)};
       let renamed=false;
       settings.folders=settings.folders.map(f=>{if(!f)return f;const nn=normalizeFolderName(f.name);if(nn!==String(f.name||'').trim())renamed=true;return {...f,name:nn}});
+       if(!Array.isArray(data.folders) || !data.folders.some(f=>f && extractFolderId(f.url||f.id||'')===extractFolderId(FEATURED_FOLDER.url))){try{await configRef.child('folders').transaction(current=>addFeaturedFolder(current),undefined,false)}catch(e){console.warn('Chưa thể đồng bộ folder mới lên Firebase:',e)}}
       if(renamed){try{await configRef.update({folders:settings.folders})}catch(e){console.warn('Không thể lưu tên thư mục mới lên Firebase:',e)}}
       cacheSettings();applyTitle();renderFolders();
-      if(!hasRequiredFolder(settings.folders)) await syncRequiredFolder();
       if(oldVersion && oldVersion!==settings.authVersion && localStorage.getItem(LOGIN_KEY)==='1'){
         if(localStorage.getItem(LOGIN_VERSION_KEY)!==settings.authVersion){localStorage.removeItem(LOGIN_KEY);localStorage.removeItem(LOGIN_VERSION_KEY);closeSettings();closeViewer();showLogin();toast('Mật khẩu đã thay đổi. Vui lòng đăng nhập lại.','err')}
       }
@@ -215,7 +189,13 @@ function renderFolders(){
   if(!items.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">Chưa có thư mục phù hợp. Người quản trị có thể vào <b>⚙️ Cài đặt</b> để thêm folder Google Drive.</div>';return}
   grid.innerHTML=items.map(f=>{const i=(settings.folders||[]).indexOf(f);return `<article class="folder-card" onclick="openFolder(${i})"><div class="folder-icon">📁</div><h3>${escapeHtml(normalizeFolderName(f.name))}</h3><p>${escapeHtml(f.desc||'Tài liệu lưu trên Google Drive')}</p><div class="folder-meta">XEM TÀI LIỆU →</div></article>`}).join('')
 }
-function openFolder(index){const f=settings.folders[index];if(!f)return;const e=embedUrl(f);if(!e){alert('Link thư mục Google Drive chưa hợp lệ.');return}document.getElementById('viewerTitle').textContent=normalizeFolderName(f.name);document.getElementById('driveFrame').src=e;document.getElementById('openDriveBtn').onclick=()=>window.open(normalDriveUrl(f),'_blank','noopener');document.getElementById('viewer').classList.remove('hidden')}
+function openFolder(index){const f=settings.folders[index];if(!f)return;const e=embedUrl(f);if(!e){alert('Link thư mục Google Drive chưa hợp lệ.');return}document.getElementById('viewerTitle').textContent=normalizeFolderName(f.name);document.getElementById('driveFrame').src=e;document.getElementById('openDriveBtn').onclick=()=>window.open(normalDriveUrl(f),'_blank','noopener');document.getElementById('downloadFolderBtn').onclick=()=>downloadWholeFolder(f);document.getElementById('viewer').classList.remove('hidden')}
+function downloadWholeFolder(folder){
+  const url=normalDriveUrl(folder);
+  const opened=window.open(url,'_blank','noopener');
+  if(!opened) toast('Hãy cho phép mở tab mới để tải thư mục trên Google Drive.','err');
+  else toast('Trong Google Drive: chọn tên thư mục → Tải xuống (ZIP).','ok');
+}
 function closeViewer(){document.getElementById('viewer').classList.add('hidden');document.getElementById('driveFrame').src='about:blank'}
 
 function openSettings(){const adminPass=prompt('Nhập mật khẩu quản trị:');if(adminPass!==ADMIN_PASSWORD){if(adminPass!==null)alert('Mật khẩu quản trị không đúng.');return}document.getElementById('settingTitle').value=settings.title||DEFAULT_SETTINGS.title;document.getElementById('newLoginPassword').value='';document.getElementById('confirmLoginPassword').value='';renderFolderRows();document.getElementById('settingsModal').classList.remove('hidden')}
@@ -228,8 +208,7 @@ function resetFolders(){if(!confirm('Xóa toàn bộ danh sách thư mục đang
 async function saveSettings(){
   if(!firebaseReady||!configRef){alert('Chưa kết nối được Firebase. Không thể lưu cấu hình dùng chung.');return}
   const title=document.getElementById('settingTitle').value.trim()||DEFAULT_SETTINGS.title;
-  const folders=(settings.folders||[]).map(f=>({name:normalizeFolderName(f.name),url:String(f.url||'').trim(),desc:String(f.desc||'').trim()})).filter(f=>f.name||f.url||f.desc);
-  if(!hasRequiredFolder(folders)) folders.push({...REQUIRED_DRIVE_FOLDER});
+  const folders=addFeaturedFolder(settings.folders||[]).map(f=>({name:normalizeFolderName(f.name),url:String(f.url||'').trim(),desc:String(f.desc||'').trim()})).filter(f=>f.name||f.url||f.desc);
   const incomplete=folders.filter(f=>!f.name||!f.url);if(incomplete.length){alert('Mỗi thư mục cần có cả Tên thư mục và Link Google Drive.');return}
   const invalid=folders.filter(f=>!extractFolderId(f.url));if(invalid.length){alert('Có link Drive chưa đúng dạng folder. Hãy dùng link có /drive/folders/...');return}
   const p1=document.getElementById('newLoginPassword').value;const p2=document.getElementById('confirmLoginPassword').value;
