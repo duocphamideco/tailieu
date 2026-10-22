@@ -95,7 +95,7 @@ const firebaseConfig = {
   measurementId: "G-TJTL87T9MV"
 };
 
-const FEATURED_FOLDER = {name:'KHO TÀI LIỆU GOOGLE DRIVE IDECO',url:'https://drive.google.com/drive/folders/1Nf2B8Xx3CXkTYGJB05EWMeCENEyxRgEs?usp=drive_link',desc:'Tra cứu, xem, tải từng file hoặc tải toàn bộ thư mục từ Google Drive.'};
+const FEATURED_FOLDER = {name:'ERP EXTENSION CHROME',url:'https://drive.google.com/drive/folders/1Nf2B8Xx3CXkTYGJB05EWMeCENEyxRgEs?usp=drive_link',desc:'Tra cứu, xem, tải từng file hoặc tải toàn bộ thư mục từ Google Drive.'};
 function addFeaturedFolder(folders){
   const arr=Array.isArray(folders)?folders.slice():[];
   const idx=arr.findIndex(f=>f && extractFolderId(f.url||f.id||'')===extractFolderId(FEATURED_FOLDER.url));
