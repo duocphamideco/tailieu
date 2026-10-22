@@ -100,6 +100,7 @@ function addFeaturedFolder(folders){
   const arr=Array.isArray(folders)?folders.slice():[];
   const idx=arr.findIndex(f=>f && extractFolderId(f.url||f.id||'')===extractFolderId(FEATURED_FOLDER.url));
   if(idx<0) arr.unshift({...FEATURED_FOLDER});
+  else arr[idx]={...arr[idx],name:FEATURED_FOLDER.name};
   return arr;
 }
 const ADMIN_PASSWORD = 'minhtriet1973';
@@ -150,7 +151,7 @@ async function initFirebase(){
       }
       const oldVersion=settings.authVersion;
       settings={...DEFAULT_SETTINGS,...data,folders:addFeaturedFolder(data.folders)};
-      let renamed=false;
+      let renamed=Array.isArray(data.folders) && data.folders.some(f=>f && extractFolderId(f.url||f.id||'')===extractFolderId(FEATURED_FOLDER.url) && f.name!==FEATURED_FOLDER.name);
       settings.folders=settings.folders.map(f=>{if(!f)return f;const nn=normalizeFolderName(f.name);if(nn!==String(f.name||'').trim())renamed=true;return {...f,name:nn}});
        if(!Array.isArray(data.folders) || !data.folders.some(f=>f && extractFolderId(f.url||f.id||'')===extractFolderId(FEATURED_FOLDER.url))){try{await configRef.child('folders').transaction(current=>addFeaturedFolder(current),undefined,false)}catch(e){console.warn('Chưa thể đồng bộ folder mới lên Firebase:',e)}}
       if(renamed){try{await configRef.update({folders:settings.folders})}catch(e){console.warn('Không thể lưu tên thư mục mới lên Firebase:',e)}}
